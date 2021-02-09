@@ -1,6 +1,7 @@
 PROJECT=upshoot
 GBDK=../gbdk
 #EMULATOR=vbam -f 17
+#EMULATOR=vbam -f 2
 EMULATOR=mgba-qt
 
 CC=$(GBDK)/bin/lcc
