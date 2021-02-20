@@ -3,12 +3,14 @@
 #include <rand.h>
 #include "media/tiles.c"
 
+#define NUMBER_OF_TILES 20
 #define TILE_EMPTY 0
 #define TILE_PLAYER 1
 #define TILE_ROCKET 2
 #define TILE_ENEMY 3
 #define TILE_RAY 4
 #define TILE_EXPLOSION 5
+#define TILE_ZERO 10
 
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
@@ -16,10 +18,13 @@
 // 160x144 px = 20x18 tiles
 #define TW 20
 #define TH 18
-#define ENEMIES TH
+#define ENEMIES TH-1
 #define ENEMY_MIN_SPEED 40
 #define ENEMY_MAX_SPEED 1
 #define RAY_DURATION 8
+
+#define HIGHSCORE_X TW-1
+#define HIGHSCORE_Y TH-1
 
 INT8 gameRunning = -1;
 INT8 enemies[ENEMIES];
@@ -28,6 +33,8 @@ INT8 explosions_time[ENEMIES];
 INT8 player;
 INT8 shot;
 INT8 enemySpeed = ENEMY_MIN_SPEED;
+
+INT16 highscore = 0;
 
 void setTile( INT8 x, INT8 y, INT8 tile ) {
     unsigned char buffer[1] = { tile };
@@ -39,11 +46,22 @@ void movePlayer( INT8 direction ) {
     player += direction;
     if( player < 0 )
         player = 0;
-    else if( player >= TH )
-        player = TH -1;
+    else if( player >= ENEMIES )
+        player = ENEMIES -1;
 
     setTile( 0, lastPlayer, TILE_EMPTY );
     setTile( 0, player, TILE_PLAYER );
+}
+
+void updateHighscore() {
+    INT8 x = HIGHSCORE_X;
+    INT16 score = highscore;
+    while( score > 0 ) {
+        INT8 remainder = score % 10;
+        score-=remainder;
+        score/=10;
+        setTile( x--, HIGHSCORE_Y, TILE_ZERO+remainder );
+    }
 }
 
 void updateExplosions() {
@@ -88,6 +106,8 @@ void shoot() {
         if( enemies[shot] < TW ) {
             NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
 
+            highscore++;
+
             explosions_x[shot] = enemies[shot];
             explosions_time[shot] = EXPLOSION_FRAMES;
 
@@ -119,13 +139,12 @@ void shoot() {
 }
 
 void init() {
-    set_bkg_data( 0, 8, Tiles );
+    set_bkg_data( 0, NUMBER_OF_TILES, Tiles );
     fill_bkg_rect( 0, 0, TW, TH, 0 );
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
         enemies[i] = randomEnemyX();
-        explosions_time[i] = 10;
-        explosions_x[i] = i;
+        explosions_time[i] = 0;
     }
 
     player = TH/2;
@@ -183,11 +202,13 @@ void main() {
     while(1) {
         init();
 
+        highscore = 0;
 
         while(gameRunning) {
             updateEnemies();
             updateExplosions();
             shoot();
+            updateHighscore();
 
             switch( joypad() ) {
                 case J_UP:
@@ -215,7 +236,7 @@ void main() {
         }
 
         setTile( 0, 0, TILE_EMPTY );
-        printf("\n:;\n\n\n\n\n\n\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart\n\n\n\n\n\n");
+        printf("\n:;\n\n\n\n\nScore: %d\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart\n\n\n\n\n\n", highscore);
         while( joypad() != J_B ) wait_vbl_done;
     }
 }
