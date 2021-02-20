@@ -18,10 +18,14 @@
 #define TILE_PRESS_B 29
 #define TILE_PRESS_B_W 4
 
+#define SPRITE_ROCKET 0
+
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
 
 // 160x144 px = 20x18 tiles
+#define PW 160
+#define PH 144
 #define TW 20
 #define TH 18
 #define ENEMIES TH-1
@@ -107,6 +111,14 @@ void updateExplosions() {
         }
 }
 
+void updateRocket() {
+     if( shadow_OAM[SPRITE_ROCKET].x > 0 ) {
+        scroll_sprite( SPRITE_ROCKET, 1, 0 );
+        if( shadow_OAM[SPRITE_ROCKET].x > PW+8 )
+            move_sprite( SPRITE_ROCKET, 0, 0 );
+     }
+}
+
 INT8 enemyRepeat = 0;
 void updateEnemies() {
     if( enemyRepeat-- > 0 )
@@ -131,19 +143,31 @@ INT8 randomEnemyX() {
     return (rand() & 0x1F) + TW + RAY_DURATION;
 }
 
+void killEnemy( INT8 enemy ) {
+    NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
+
+    explosions_x[enemy] = enemies[enemy];
+    explosions_time[enemy] = EXPLOSION_FRAMES;
+
+    enemies[enemy]=randomEnemyX();
+}
+
 INT8 shootRepeat = 0;
+INT8 rocketY = -1;
 void shoot() {
+    /* check for rocket collisions */
+    if( rocketY >= 0 ) {
+        if( enemies[ rocketY ] == shadow_OAM[SPRITE_ROCKET].x / 8 ) {
+            highscore += 10;
+            killEnemy( rocketY );
+        }
+    }
+
     /* check for enemy collisions */
     if( shootRepeat >= 2 ) {
         if( enemies[shot] < TW ) {
-            NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
-
             highscore++;
-
-            explosions_x[shot] = enemies[shot];
-            explosions_time[shot] = EXPLOSION_FRAMES;
-
-            enemies[shot]=randomEnemyX();
+            killEnemy( shot );
         }
     }
 
@@ -173,6 +197,12 @@ void shoot() {
 void init() {
     set_bkg_data( 0, NUMBER_OF_TILES, Tiles );
     fill_bkg_rect( 0, 0, TW, TH, 0 );
+
+    /* sprites */
+    set_sprite_data( SPRITE_ROCKET, 3, Tiles );
+    set_sprite_tile( SPRITE_ROCKET, TILE_ROCKET );
+    set_sprite_prop( SPRITE_ROCKET, 0x00 );
+    move_sprite(     SPRITE_ROCKET, 0, 0 );
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
         enemies[i] = randomEnemyX();
@@ -228,7 +258,10 @@ void init() {
 void main() {
     UINT8 repeat = 0;
 
+    INT8 *spritePointer;
+
     SHOW_BKG;
+    SHOW_SPRITES;
     DISPLAY_ON;
 
     while(1) {
@@ -240,6 +273,7 @@ void main() {
             updateEnemies();
             updateExplosions();
             shoot();
+            updateRocket();
             updateHighscore( HIGHSCORE_X, HIGHSCORE_Y );
 
             switch( joypad() ) {
@@ -263,6 +297,10 @@ void main() {
                         shot = player;
                         shootRepeat = RAY_DURATION;
                     }
+                    break;
+                case J_B:
+                    move_sprite( SPRITE_ROCKET, 13, (player+2)*8+1 );
+                    rocketY = player;
                     break;
                 default:
                     repeat = 0;
