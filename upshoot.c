@@ -3,7 +3,7 @@
 #include <rand.h>
 #include "media/tiles.c"
 
-#define NUMBER_OF_TILES 20
+#define NUMBER_OF_TILES 33
 #define TILE_EMPTY 0
 #define TILE_PLAYER 1
 #define TILE_ROCKET 2
@@ -11,6 +11,12 @@
 #define TILE_RAY 4
 #define TILE_EXPLOSION 5
 #define TILE_ZERO 10
+#define TILE_SCORE 20
+#define TILE_SCORE_W 3
+#define TILE_GAME_OVER 23
+#define TILE_GAME_OVER_W 6
+#define TILE_PRESS_B 29
+#define TILE_PRESS_B_W 4
 
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
@@ -41,6 +47,17 @@ void setTile( INT8 x, INT8 y, INT8 tile ) {
     set_bkg_tiles( x, y, 1, 1, buffer );
 }
 
+void setTiles( INT8 x, INT8 y, INT8 startTile, INT8 w ) {
+    for( INT8 i = 0; i < w; i++ )
+        setTile( x+i, y, startTile+i );
+}
+
+void setAllTiles( INT8 tile ) {
+    for( INT8 y = 0; y < TH; y++ )
+        for( INT8 x = 0; x < TW; x++ )
+            setTile( x, y, tile );
+}
+
 void movePlayer( INT8 direction ) {
     INT8 lastPlayer = player;
     player += direction;
@@ -53,15 +70,30 @@ void movePlayer( INT8 direction ) {
     setTile( 0, player, TILE_PLAYER );
 }
 
-void updateHighscore() {
-    INT8 x = HIGHSCORE_X;
+void updateHighscore( INT8 x, INT8 y ) {
+    if( highscore == 0 ) {
+        setTile( x, y, TILE_ZERO );
+        return;
+    }
+
     INT16 score = highscore;
     while( score > 0 ) {
         INT8 remainder = score % 10;
         score-=remainder;
         score/=10;
-        setTile( x--, HIGHSCORE_Y, TILE_ZERO+remainder );
+        setTile( x--, y, TILE_ZERO+remainder );
     }
+}
+
+INT8 numberWidth( INT16 number ) {
+    INT8 w = 0;
+    while( number > 0 ) {
+        number /= 10;
+        w++;
+    }
+    if( w == 0 )
+        return 1;
+    return w;
 }
 
 void updateExplosions() {
@@ -208,7 +240,7 @@ void main() {
             updateEnemies();
             updateExplosions();
             shoot();
-            updateHighscore();
+            updateHighscore( HIGHSCORE_X, HIGHSCORE_Y );
 
             switch( joypad() ) {
                 case J_UP:
@@ -223,6 +255,9 @@ void main() {
                         repeat = REPEAT_FRAMES;
                     }
                     break;
+                case J_LEFT:
+                    gameRunning = 0;
+                    break;
                 case J_A:
                     if( shootRepeat == 0 ) {
                         shot = player;
@@ -235,8 +270,14 @@ void main() {
             wait_vbl_done();
         }
 
-        setTile( 0, 0, TILE_EMPTY );
-        printf("\n:;\n\n\n\n\nScore: %d\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart\n\n\n\n\n\n", highscore);
+        //printf("\n:;\n\n\n\n\nScore: %d\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart\n\n\n\n\n\n", highscore);
+        setAllTiles( TILE_EMPTY );
+        setTiles( 5, 5, TILE_GAME_OVER, TILE_GAME_OVER_W );
+        setTiles( 5, 6, TILE_SCORE, TILE_SCORE_W );
+        setTile( 5 + TILE_SCORE_W, 6, TILE_EMPTY );
+        updateHighscore( 5 + TILE_SCORE_W + numberWidth( highscore ), 6 );
+        setTiles( 5, 8, TILE_PRESS_B, TILE_PRESS_B_W );
+
         while( joypad() != J_B ) wait_vbl_done;
     }
 }
