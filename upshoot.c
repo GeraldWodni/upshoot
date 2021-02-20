@@ -8,8 +8,10 @@
 #define TILE_ROCKET 2
 #define TILE_ENEMY 3
 #define TILE_RAY 4
+#define TILE_EXPLOSION 5
 
 #define REPEAT_FRAMES 4
+#define EXPLOSION_FRAMES 42
 
 // 160x144 px = 20x18 tiles
 #define TW 20
@@ -21,6 +23,8 @@
 
 INT8 gameRunning = -1;
 INT8 enemies[ENEMIES];
+INT8 explosions_x[ENEMIES];
+INT8 explosions_time[ENEMIES];
 INT8 player;
 INT8 shot;
 INT8 enemySpeed = ENEMY_MIN_SPEED;
@@ -40,6 +44,17 @@ void movePlayer( INT8 direction ) {
 
     setTile( 0, lastPlayer, TILE_EMPTY );
     setTile( 0, player, TILE_PLAYER );
+}
+
+void updateExplosions() {
+    for( UINT8 i = 0; i < ENEMIES; i++ )
+        if( explosions_time[i] > 0 ) {
+            explosions_time[i]--;
+            if( explosions_time[i] == 0 )
+                setTile( explosions_x[i], i, TILE_EMPTY );
+            else
+                setTile( explosions_x[i], i, TILE_EXPLOSION );
+        }
 }
 
 INT8 enemyRepeat = 0;
@@ -63,7 +78,7 @@ void updateEnemies() {
 }
 
 INT8 randomEnemyX() {
-    return (rand() & 0x1F) + TW + RAY_DURATION*2;
+    return (rand() & 0x1F) + TW + RAY_DURATION;
 }
 
 INT8 shootRepeat = 0;
@@ -71,8 +86,19 @@ void shoot() {
     /* check for enemy collisions */
     if( shootRepeat >= 2 ) {
         if( enemies[shot] < TW ) {
+            NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
+
+            explosions_x[shot] = enemies[shot];
+            explosions_time[shot] = EXPLOSION_FRAMES;
+
             enemies[shot]=randomEnemyX();
         }
+    }
+
+    /* sound */
+    if( shootRepeat == RAY_DURATION ) {
+        NR14_REG = 0x87; // TL-- -FFF Trigger, Length enable, Frequency MSB
+        //NR44_REG = 0x80; // NR44 FF23 TL-- ---- Trigger, Length enable
     }
 
     /* draw enemies */
@@ -96,13 +122,56 @@ void init() {
     set_bkg_data( 0, 8, Tiles );
     fill_bkg_rect( 0, 0, TW, TH, 0 );
 
-    for( UINT8 i = 0; i < ENEMIES; i++ )
+    for( UINT8 i = 0; i < ENEMIES; i++ ) {
         enemies[i] = randomEnemyX();
+        explosions_time[i] = 10;
+        explosions_x[i] = i;
+    }
 
     player = TH/2;
     movePlayer( 0 );
 
     gameRunning = -1;
+
+    // sound registers: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware
+    NR52_REG = 0x80; // enable sound
+    NR51_REG = 0xFF; // left, right enable
+    NR50_REG = 0x77; // left, right max volume
+
+    // square 1
+    NR10_REG = 0x1E; // -PPP NSSS Sweep period, negate, shift
+    NR11_REG = 0x10; // DDLL LLLL Duty, Length load (64-L)
+    NR12_REG = 0xF3; // VVVV APPP Starting volume, Envelope add mode, period
+    NR13_REG = 0xFF; // FFFF FFFF Frequency LSB
+
+    // square 2
+    NR21_REG = 0x10; // DDLL LLLL Duty, Length load (64-L)
+    NR22_REG = 0xF0; // VVVV APPP Starting volume, Envelope add mode, period
+    NR23_REG = 0xFF; // FFFF FFFF Frequency LSB
+
+    // noise
+    NR41_REG = 0x03; // --LL LLLL Length load (64-L)
+    NR42_REG = 0xF7; // VVVV APPP Starting volume, Envelope add mode, period
+    NR43_REG = 0x3F; // SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
+    //NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
+
+    //INT8 wait = -1;
+    //while(wait) {
+    //    switch( joypad() ) {
+    //        case J_UP:
+    //            NR14_REG = 0x87;
+    //            break;
+    //        case J_DOWN:
+    //            NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
+    //            break;
+    //        case J_RIGHT:
+    //            NR24_REG = 0xC1; // NR24 FF19 TL-- -FFF Trigger, Length enable, Frequency MSB
+    //            break;
+    //        case J_A:
+    //            wait = 0;
+    //            break;
+    //    }
+    //}
 }
 
 void main() {
@@ -114,8 +183,10 @@ void main() {
     while(1) {
         init();
 
+
         while(gameRunning) {
             updateEnemies();
+            updateExplosions();
             shoot();
 
             switch( joypad() ) {
@@ -144,7 +215,7 @@ void main() {
         }
 
         setTile( 0, 0, TILE_EMPTY );
-        printf(":;\n\n\n\n\n\n\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart");
+        printf("\n:;\n\n\n\n\n\n\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart\n\n\n\n\n\n");
         while( joypad() != J_B ) wait_vbl_done;
     }
 }
