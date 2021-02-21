@@ -172,7 +172,7 @@ void shoot() {
 
     /* check for enemy collisions */
     if( shootRepeat >= 2 ) {
-        if( ENEMY_SPRITE(shot).x < (PW + 6) ) {
+        if( ENEMY_SPRITE(shot).tile == TILE_ENEMY && ENEMY_SPRITE(shot).x < (PW + 6) ) {
             highscore++;
             killEnemy( shot );
         }
