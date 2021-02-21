@@ -10,6 +10,7 @@
 #define TILE_ENEMY 3
 #define TILE_RAY 4
 #define TILE_EXPLOSION 5
+#define TILE_GRADIENT 6
 #define TILE_ZERO 10
 #define TILE_SCORE 20
 #define TILE_SCORE_W 3
@@ -27,6 +28,9 @@
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
 
+#define TARGET_BKG 0
+#define TARGET_WIN 1
+
 // 160x144 px = 20x18 tiles
 #define PW 160
 #define PH 144
@@ -38,7 +42,7 @@
 #define RAY_DURATION 8
 
 #define HIGHSCORE_X TW-1
-#define HIGHSCORE_Y TH-1
+#define HIGHSCORE_Y 0
 
 INT8 gameRunning = -1;
 INT8 explosions_time[ENEMIES];
@@ -48,9 +52,13 @@ UINT8 enemySpeed = ENEMY_MIN_SPEED;
 
 INT16 highscore = 0;
 
+INT8 tileTarget = TARGET_BKG;
 void setTile( INT8 x, INT8 y, INT8 tile ) {
     unsigned char buffer[1] = { tile };
-    set_bkg_tiles( x, y, 1, 1, buffer );
+    if( tileTarget == TARGET_BKG )
+        set_bkg_tiles( x, y, 1, 1, buffer );
+    else
+        set_win_tiles( x, y, 1, 1, buffer );
 }
 
 void setTiles( INT8 x, INT8 y, INT8 startTile, INT8 w ) {
@@ -194,8 +202,13 @@ void shoot() {
 }
 
 void init() {
+    /* background */
     set_bkg_data( 0, NUMBER_OF_TILES, Tiles );
     fill_bkg_rect( 0, 0, TW, TH, 0 );
+
+    /* window */
+    move_win( 7, PH-8 );
+    fill_win_rect( 0, 0, TW, TH, TILE_GRADIENT );
 
     /* sprites */
     set_sprite_data( SPRITE_ROCKET, NUMBER_OF_TILES, Tiles );
@@ -264,6 +277,7 @@ void main() {
     UINT8 repeat = 0;
 
     SHOW_BKG;
+    SHOW_WIN;
     SHOW_SPRITES;
     DISPLAY_ON;
 
@@ -277,7 +291,9 @@ void main() {
             updateExplosions();
             shoot();
             updateRocket();
+            tileTarget = TARGET_WIN;
             updateHighscore( HIGHSCORE_X, HIGHSCORE_Y );
+            tileTarget = TARGET_BKG;
 
             switch( joypad() ) {
                 case J_UP:
