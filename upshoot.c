@@ -11,6 +11,7 @@
 #define TILE_RAY 4
 #define TILE_EXPLOSION 5
 #define TILE_GRADIENT 6
+#define TILE_STARFIELD 7
 #define TILE_ZERO 10
 #define TILE_SCORE 20
 #define TILE_SCORE_W 3
@@ -36,6 +37,8 @@
 #define PH 144
 #define TW 20
 #define TH 18
+#define BW 32
+#define BH 32
 #define ENEMIES TH-1
 #define ENEMY_MIN_SPEED 8
 #define ENEMY_MAX_SPEED 1
@@ -131,6 +134,10 @@ void updateRocket() {
      }
 }
 
+void updateBackground() {
+    scroll_bkg( 1, 0 );
+}
+
 INT8 enemyRepeat = 0;
 void updateEnemies() {
     if( enemyRepeat-- > 0 )
@@ -187,14 +194,14 @@ void shoot() {
     /* draw enemies */
     if( shootRepeat > 2 ) {
         shootRepeat--;
-        for( UINT8 x = 1; x < TW; x++ )
+        for( UINT8 x = 0; x < BW; x++ )
             setTile( x, shot, TILE_RAY );
         return;
     }
     if( shootRepeat == 2 ) {
         shootRepeat--;
-        for( UINT8 x = 1; x < TW; x++ )
-            setTile( x, shot, TILE_EMPTY );
+        for( UINT8 x = 0; x < BW; x++ )
+            setTile( x, shot, TILE_STARFIELD );
         return;
     }
     if( shootRepeat == 1 && joypad() != J_A )
@@ -204,7 +211,7 @@ void shoot() {
 void init() {
     /* background */
     set_bkg_data( 0, NUMBER_OF_TILES, Tiles );
-    fill_bkg_rect( 0, 0, TW, TH, 0 );
+    fill_bkg_rect( 0, 0, BW, BH, TILE_STARFIELD );
 
     /* window */
     move_win( 7, PH-8 );
@@ -291,6 +298,7 @@ void main() {
             updateExplosions();
             shoot();
             updateRocket();
+            updateBackground();
             tileTarget = TARGET_WIN;
             updateHighscore( HIGHSCORE_X, HIGHSCORE_Y );
             tileTarget = TARGET_BKG;
@@ -332,6 +340,7 @@ void main() {
         for( INT8 i = 0; i < ENEMIES; i++ )
             ENEMY_SPRITE(i).x = 0;
 
+        move_bkg( 0, 0 );
         setTiles( 5, 5, TILE_GAME_OVER, TILE_GAME_OVER_W );
         setTiles( 5, 6, TILE_SCORE, TILE_SCORE_W );
         setTile( 5 + TILE_SCORE_W, 6, TILE_EMPTY );
