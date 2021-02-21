@@ -19,6 +19,8 @@
 #define TILE_PRESS_B_W 4
 
 #define SPRITE_ROCKET 0
+#define SPRITE_ENEMIES 1
+#define ENEMY_SPRITE(I) shadow_OAM[SPRITE_ENEMIES+I]
 
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
@@ -29,7 +31,7 @@
 #define TW 20
 #define TH 18
 #define ENEMIES TH-1
-#define ENEMY_MIN_SPEED 40
+#define ENEMY_MIN_SPEED 8
 #define ENEMY_MAX_SPEED 1
 #define RAY_DURATION 8
 
@@ -37,12 +39,10 @@
 #define HIGHSCORE_Y TH-1
 
 INT8 gameRunning = -1;
-INT8 enemies[ENEMIES];
-INT8 explosions_x[ENEMIES];
 INT8 explosions_time[ENEMIES];
 INT8 player;
 INT8 shot;
-INT8 enemySpeed = ENEMY_MIN_SPEED;
+UINT8 enemySpeed = ENEMY_MIN_SPEED;
 
 INT16 highscore = 0;
 
@@ -100,14 +100,18 @@ INT8 numberWidth( INT16 number ) {
     return w;
 }
 
+UINT8 randomEnemyX() {
+    return 255 - (rand() & 0x3F);
+}
+
 void updateExplosions() {
     for( UINT8 i = 0; i < ENEMIES; i++ )
         if( explosions_time[i] > 0 ) {
             explosions_time[i]--;
-            if( explosions_time[i] == 0 )
-                setTile( explosions_x[i], i, TILE_EMPTY );
-            else
-                setTile( explosions_x[i], i, TILE_EXPLOSION );
+            if( explosions_time[i] == 0 ) {
+                ENEMY_SPRITE(i).tile = TILE_ENEMY;
+                ENEMY_SPRITE(i).x = randomEnemyX();
+            }
         }
 }
 
@@ -126,30 +130,22 @@ void updateEnemies() {
     enemyRepeat = enemySpeed;
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
-        if( enemies[i] < TW ) {
-            setTile( enemies[i], i, TILE_EMPTY );
-            enemies[i]--;
-            setTile( enemies[i], i, TILE_ENEMY );
-        }
-        else
-            enemies[i]--;
+        if( ENEMY_SPRITE(i).tile == TILE_EXPLOSION )
+            continue;
 
-        if( enemies[i] == 0 )
+        UINT8 x = ENEMY_SPRITE(i).x-1;
+        ENEMY_SPRITE(i).x = x;
+
+        if( x < 7 )
             gameRunning = 0;
     }
-}
-
-INT8 randomEnemyX() {
-    return (rand() & 0x1F) + TW + RAY_DURATION;
 }
 
 void killEnemy( INT8 enemy ) {
     NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
 
-    explosions_x[enemy] = enemies[enemy];
+    ENEMY_SPRITE( enemy ).tile = TILE_EXPLOSION;
     explosions_time[enemy] = EXPLOSION_FRAMES;
-
-    enemies[enemy]=randomEnemyX();
 }
 
 INT8 shootRepeat = 0;
@@ -157,15 +153,18 @@ INT8 rocketY = -1;
 void shoot() {
     /* check for rocket collisions */
     if( rocketY >= 0 ) {
-        if( enemies[ rocketY ] == shadow_OAM[SPRITE_ROCKET].x / 8 ) {
+        if( ENEMY_SPRITE( rocketY ).x <= shadow_OAM[SPRITE_ROCKET].x ) {
             highscore += 10;
             killEnemy( rocketY );
+
+            rocketY = -1;
+            move_sprite( SPRITE_ROCKET, 0, 0 );
         }
     }
 
     /* check for enemy collisions */
     if( shootRepeat >= 2 ) {
-        if( enemies[shot] < TW ) {
+        if( ENEMY_SPRITE(shot).x < (PW + 6) ) {
             highscore++;
             killEnemy( shot );
         }
@@ -199,13 +198,16 @@ void init() {
     fill_bkg_rect( 0, 0, TW, TH, 0 );
 
     /* sprites */
-    set_sprite_data( SPRITE_ROCKET, 3, Tiles );
+    set_sprite_data( SPRITE_ROCKET, NUMBER_OF_TILES, Tiles );
     set_sprite_tile( SPRITE_ROCKET, TILE_ROCKET );
     set_sprite_prop( SPRITE_ROCKET, 0x00 );
     move_sprite(     SPRITE_ROCKET, 0, 0 );
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
-        enemies[i] = randomEnemyX();
+        set_sprite_tile( SPRITE_ENEMIES + i, TILE_ENEMY );
+        set_sprite_prop( SPRITE_ENEMIES + i, 0x00 );
+        move_sprite(     SPRITE_ENEMIES + i, randomEnemyX(), 16 + i*8 );
+
         explosions_time[i] = 0;
     }
 
@@ -258,8 +260,6 @@ void init() {
 void main() {
     UINT8 repeat = 0;
 
-    INT8 *spritePointer;
-
     SHOW_BKG;
     SHOW_SPRITES;
     DISPLAY_ON;
@@ -310,6 +310,9 @@ void main() {
 
         //printf("\n:;\n\n\n\n\nScore: %d\nGame Over, sorry :(\n\nHave a nice day ;)\n\nPress B to restart\n\n\n\n\n\n", highscore);
         setAllTiles( TILE_EMPTY );
+        for( INT8 i = 0; i < ENEMIES; i++ )
+            ENEMY_SPRITE(i).x = 0;
+
         setTiles( 5, 5, TILE_GAME_OVER, TILE_GAME_OVER_W );
         setTiles( 5, 6, TILE_SCORE, TILE_SCORE_W );
         setTile( 5 + TILE_SCORE_W, 6, TILE_EMPTY );
@@ -317,5 +320,6 @@ void main() {
         setTiles( 5, 8, TILE_PRESS_B, TILE_PRESS_B_W );
 
         while( joypad() != J_B ) wait_vbl_done;
+        while( joypad() != 0   ) wait_vbl_done; // do not shoot rocket
     }
 }
