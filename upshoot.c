@@ -19,8 +19,10 @@
 #define TILE_PRESS_B_W 4
 
 #define SPRITE_ROCKET 0
-#define SPRITE_ENEMIES 1
-#define ENEMY_SPRITE(I) shadow_OAM[SPRITE_ENEMIES+I]
+#define SPRITE_PLAYER 1
+#define SPRITE_ENEMIES 2
+#define SPRITE(I) shadow_OAM[I]
+#define ENEMY_SPRITE(I) SPRITE(SPRITE_ENEMIES+I)
 
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
@@ -63,15 +65,13 @@ void setAllTiles( INT8 tile ) {
 }
 
 void movePlayer( INT8 direction ) {
-    INT8 lastPlayer = player;
     player += direction;
     if( player < 0 )
         player = 0;
     else if( player >= ENEMIES )
         player = ENEMIES -1;
 
-    setTile( 0, lastPlayer, TILE_EMPTY );
-    setTile( 0, player, TILE_PLAYER );
+    SPRITE(SPRITE_PLAYER).y = player*8 + 16;
 }
 
 void updateHighscore( INT8 x, INT8 y ) {
@@ -211,6 +211,9 @@ void init() {
         explosions_time[i] = 0;
     }
 
+    set_sprite_tile( SPRITE_PLAYER, TILE_PLAYER );
+    set_sprite_prop( SPRITE_PLAYER, 0x00 );
+    move_sprite(     SPRITE_PLAYER, 8, 16 );
     player = TH/2;
     movePlayer( 0 );
 
