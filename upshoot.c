@@ -64,7 +64,7 @@ UINT8 enemySpeed = ENEMY_MIN_SPEED;
 INT16 highscore = 0;
 
 INT8 tileTarget = TARGET_BKG;
-void setTile( INT8 x, INT8 y, INT8 tile ) {
+void setTile( INT8 x, INT8 y, UINT8 tile ) {
     unsigned char buffer[1] = { tile };
     if( tileTarget == TARGET_BKG )
         set_bkg_tiles( x, y, 1, 1, buffer );
@@ -77,7 +77,7 @@ void setTiles( INT8 x, INT8 y, INT8 startTile, INT8 w ) {
         setTile( x+i, y, startTile+i );
 }
 
-void setAllTiles( INT8 tile ) {
+void setAllTiles( UINT8 tile ) {
     for( INT8 y = 0; y < TH; y++ )
         for( INT8 x = 0; x < TW; x++ )
             setTile( x, y, tile );
@@ -123,7 +123,8 @@ UINT8 randomEnemyX() {
 }
 
 void resetEnemy( INT8 enemy ) {
-    INT8 r = rand(), tile;
+    INT8 r = rand();
+    UINT8 tile;
     if( r > 0x70 )
         tile = TILE_LIFE;
     else if( r > 0x00 )
@@ -160,7 +161,7 @@ void updateBackground() {
 UINT8 frameCounter = 0;
 void updateEnemies() {
     frameCounter++;
-    for( UINT8 i = 0; i < ENEMIES; i++ ) {
+    for( INT8 i = 0; i < ENEMIES; i++ ) {
         UINT8 tile = ENEMY_SPRITE(i).tile;
         if( tile == TILE_EXPLOSION )
             continue;
