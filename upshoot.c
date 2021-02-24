@@ -159,7 +159,6 @@ void updateEnemies() {
             case TILE_ASTROID:
                 x+= -ASTROID_SPEED;
                 break;
-// TODO: define instead of default did not yield an error - compiler error or strange new c-concept?
             case TILE_ENEMY:
                 if( (frameCounter & 0x07) != 0 )
                     continue;
