@@ -12,6 +12,7 @@
 #define TILE_EXPLOSION 5
 #define TILE_GRADIENT 6
 #define TILE_STARFIELD 7
+#define TILE_ASTROID 8
 #define TILE_ZERO 10
 #define TILE_SCORE 20
 #define TILE_SCORE_W 3
@@ -42,6 +43,7 @@
 #define ENEMIES TH-1
 #define ENEMY_MIN_SPEED 8
 #define ENEMY_MAX_SPEED 1
+#define ASTROID_SPEED 2
 #define RAY_DURATION 8
 
 #define HIGHSCORE_X TW-1
@@ -115,13 +117,20 @@ UINT8 randomEnemyX() {
     return 255 - (rand() & 0x3F);
 }
 
+void resetEnemy( INT8 enemy ) {
+    if( rand() > 0x00 )
+        ENEMY_SPRITE(enemy).tile = TILE_ASTROID;
+    else
+        ENEMY_SPRITE(enemy).tile = TILE_ENEMY;
+    ENEMY_SPRITE(enemy).x = randomEnemyX();
+}
+
 void updateExplosions() {
     for( UINT8 i = 0; i < ENEMIES; i++ )
         if( explosions_time[i] > 0 ) {
             explosions_time[i]--;
             if( explosions_time[i] == 0 ) {
-                ENEMY_SPRITE(i).tile = TILE_ENEMY;
-                ENEMY_SPRITE(i).x = randomEnemyX();
+                resetEnemy(i);
             }
         }
 }
@@ -138,21 +147,40 @@ void updateBackground() {
     scroll_bkg( 1, 0 );
 }
 
-INT8 enemyRepeat = 0;
+UINT8 frameCounter = 0;
 void updateEnemies() {
-    if( enemyRepeat-- > 0 )
-        return;
-    enemyRepeat = enemySpeed;
-
+    frameCounter++;
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
         if( ENEMY_SPRITE(i).tile == TILE_EXPLOSION )
             continue;
 
-        UINT8 x = ENEMY_SPRITE(i).x-1;
+        UINT8 x = ENEMY_SPRITE(i).x;
+        switch( ENEMY_SPRITE(i).tile ) {
+            case TILE_ASTROID:
+                x+= -ASTROID_SPEED;
+                break;
+// TODO: define instead of default did not yield an error - compiler error or strange new c-concept?
+            case TILE_ENEMY:
+                if( (frameCounter & 0x07) != 0 )
+                    continue;
+            default:
+                x+= -1;
+                break;
+        }
         ENEMY_SPRITE(i).x = x;
 
-        if( x < 7 )
+        /* collision with astroid or enemy */
+        if( x < 15 && player == i ) {
             gameRunning = 0;
+        }
+
+        /* object past player */
+        if( x < 7 ) {
+            if( ENEMY_SPRITE(i).tile != TILE_ASTROID )
+                gameRunning = 0;
+            else if( x < ASTROID_SPEED )
+                resetEnemy(i);
+        }
     }
 }
 
@@ -168,7 +196,7 @@ INT8 rocketY = -1;
 void shoot() {
     /* check for rocket collisions */
     if( rocketY >= 0 ) {
-        if( ENEMY_SPRITE( rocketY ).x <= shadow_OAM[SPRITE_ROCKET].x ) {
+        if( ENEMY_SPRITE(rocketY).tile == TILE_ENEMY && ENEMY_SPRITE( rocketY ).x <= shadow_OAM[SPRITE_ROCKET].x ) {
             highscore += 10;
             killEnemy( rocketY );
 
@@ -224,7 +252,10 @@ void init() {
     move_sprite(     SPRITE_ROCKET, 0, 0 );
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
-        set_sprite_tile( SPRITE_ENEMIES + i, TILE_ENEMY );
+        if( i==TH/2 )
+            set_sprite_tile( SPRITE_ENEMIES + i, TILE_ASTROID );
+        else
+            set_sprite_tile( SPRITE_ENEMIES + i, TILE_ENEMY );
         set_sprite_prop( SPRITE_ENEMIES + i, 0x00 );
         move_sprite(     SPRITE_ENEMIES + i, randomEnemyX(), 16 + i*8 );
 
