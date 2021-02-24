@@ -3,7 +3,7 @@
 #include <rand.h>
 #include "media/tiles.c"
 
-#define NUMBER_OF_TILES 33
+#define NUMBER_OF_TILES 34
 #define TILE_EMPTY 0
 #define TILE_PLAYER 1
 #define TILE_ROCKET 2
@@ -13,6 +13,7 @@
 #define TILE_GRADIENT 6
 #define TILE_STARFIELD 7
 #define TILE_ASTROID 8
+#define TILE_LIFE 9
 #define TILE_ZERO 10
 #define TILE_SCORE 20
 #define TILE_SCORE_W 3
@@ -20,6 +21,7 @@
 #define TILE_GAME_OVER_W 6
 #define TILE_PRESS_B 29
 #define TILE_PRESS_B_W 4
+#define TILE_X 33
 
 #define SPRITE_ROCKET 0
 #define SPRITE_PLAYER 1
@@ -49,10 +51,14 @@
 #define HIGHSCORE_X TW-1
 #define HIGHSCORE_Y 0
 
+#define LIFE_X 3
+#define LIFE_Y HIGHSCORE_Y
+
 INT8 gameRunning = -1;
 INT8 explosions_time[ENEMIES];
 INT8 player;
 INT8 shot;
+INT8 lifes = 0;
 UINT8 enemySpeed = ENEMY_MIN_SPEED;
 
 INT16 highscore = 0;
@@ -87,17 +93,16 @@ void movePlayer( INT8 direction ) {
     SPRITE(SPRITE_PLAYER).y = player*8 + 16;
 }
 
-void updateHighscore( INT8 x, INT8 y ) {
-    if( highscore == 0 ) {
+void drawNumber( INT8 x, INT8 y, INT16 value ) {
+    if( value == 0 ) {
         setTile( x, y, TILE_ZERO );
         return;
     }
 
-    INT16 score = highscore;
-    while( score > 0 ) {
-        INT8 remainder = score % 10;
-        score-=remainder;
-        score/=10;
+    while( value > 0 ) {
+        INT8 remainder = value % 10;
+        value-=remainder;
+        value/=10;
         setTile( x--, y, TILE_ZERO+remainder );
     }
 }
@@ -118,10 +123,15 @@ UINT8 randomEnemyX() {
 }
 
 void resetEnemy( INT8 enemy ) {
-    if( rand() > 0x00 )
-        ENEMY_SPRITE(enemy).tile = TILE_ASTROID;
+    INT8 r = rand(), tile;
+    if( r > 0x70 )
+        tile = TILE_LIFE;
+    else if( r > 0x00 )
+        tile = TILE_ASTROID;
     else
-        ENEMY_SPRITE(enemy).tile = TILE_ENEMY;
+        tile = TILE_ENEMY;
+
+    ENEMY_SPRITE(enemy).tile = tile;
     ENEMY_SPRITE(enemy).x = randomEnemyX();
 }
 
@@ -151,11 +161,13 @@ UINT8 frameCounter = 0;
 void updateEnemies() {
     frameCounter++;
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
-        if( ENEMY_SPRITE(i).tile == TILE_EXPLOSION )
+        UINT8 tile = ENEMY_SPRITE(i).tile;
+        if( tile == TILE_EXPLOSION )
             continue;
 
         UINT8 x = ENEMY_SPRITE(i).x;
         switch( ENEMY_SPRITE(i).tile ) {
+            case TILE_LIFE:
             case TILE_ASTROID:
                 x+= -ASTROID_SPEED;
                 break;
@@ -170,13 +182,29 @@ void updateEnemies() {
 
         /* collision with astroid or enemy */
         if( x < 15 && player == i ) {
-            gameRunning = 0;
+            if( tile == TILE_LIFE ) {
+                lifes++;
+                resetEnemy(i);
+                continue;
+            }
+            if( --lifes < 0 )
+                gameRunning = 0;
+            else {
+                resetEnemy(i);
+                continue;
+            }
         }
 
         /* object past player */
         if( x < 7 ) {
-            if( ENEMY_SPRITE(i).tile != TILE_ASTROID )
-                gameRunning = 0;
+            if( tile != TILE_ASTROID && tile != TILE_LIFE ) {
+                if( --lifes < 0 )
+                    gameRunning = 0;
+                else {
+                    resetEnemy(i);
+                    continue;
+                }
+            }
             else if( x < ASTROID_SPEED )
                 resetEnemy(i);
         }
@@ -195,7 +223,8 @@ INT8 rocketY = -1;
 void shoot() {
     /* check for rocket collisions */
     if( rocketY >= 0 ) {
-        if( ENEMY_SPRITE(rocketY).tile == TILE_ENEMY && ENEMY_SPRITE( rocketY ).x <= shadow_OAM[SPRITE_ROCKET].x ) {
+        UINT8 tile = ENEMY_SPRITE(shot).tile;
+        if( ( tile == TILE_ENEMY || tile == TILE_LIFE ) && ENEMY_SPRITE( rocketY ).x <= shadow_OAM[SPRITE_ROCKET].x ) {
             highscore += 10;
             killEnemy( rocketY );
 
@@ -206,7 +235,8 @@ void shoot() {
 
     /* check for enemy collisions */
     if( shootRepeat >= 2 ) {
-        if( ENEMY_SPRITE(shot).tile == TILE_ENEMY && ENEMY_SPRITE(shot).x < (PW + 6) ) {
+        UINT8 tile = ENEMY_SPRITE(shot).tile;
+        if( (tile == TILE_ENEMY || tile == TILE_LIFE) && ENEMY_SPRITE(shot).x < (PW + 6) ) {
             highscore++;
             killEnemy( shot );
         }
@@ -243,6 +273,11 @@ void init() {
     /* window */
     move_win( 7, PH-8 );
     fill_win_rect( 0, 0, TW, TH, TILE_GRADIENT );
+    tileTarget = TARGET_WIN;
+    setTile( LIFE_X-3, LIFE_Y, TILE_LIFE );
+    setTile( LIFE_X-2, LIFE_Y, TILE_X );
+    setTile( LIFE_X-1, LIFE_Y, TILE_EMPTY );
+    tileTarget = TARGET_BKG;
 
     /* sprites */
     set_sprite_data( SPRITE_ROCKET, NUMBER_OF_TILES, Tiles );
@@ -252,7 +287,7 @@ void init() {
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
         if( i==TH/2 )
-            set_sprite_tile( SPRITE_ENEMIES + i, TILE_ASTROID );
+            set_sprite_tile( SPRITE_ENEMIES + i, TILE_LIFE );
         else
             set_sprite_tile( SPRITE_ENEMIES + i, TILE_ENEMY );
         set_sprite_prop( SPRITE_ENEMIES + i, 0x00 );
@@ -310,6 +345,11 @@ void init() {
     //}
 }
 
+void updateWindow() {
+    drawNumber( HIGHSCORE_X, HIGHSCORE_Y, highscore );
+    drawNumber( LIFE_X, LIFE_Y, lifes );
+}
+
 void main() {
     UINT8 repeat = 0;
 
@@ -330,7 +370,7 @@ void main() {
             updateRocket();
             updateBackground();
             tileTarget = TARGET_WIN;
-            updateHighscore( HIGHSCORE_X, HIGHSCORE_Y );
+            updateWindow();
             tileTarget = TARGET_BKG;
 
             switch( joypad() ) {
@@ -374,7 +414,7 @@ void main() {
         setTiles( 5, 5, TILE_GAME_OVER, TILE_GAME_OVER_W );
         setTiles( 5, 6, TILE_SCORE, TILE_SCORE_W );
         setTile( 5 + TILE_SCORE_W, 6, TILE_EMPTY );
-        updateHighscore( 5 + TILE_SCORE_W + numberWidth( highscore ), 6 );
+        drawNumber( 5 + TILE_SCORE_W + numberWidth( highscore ), 6, highscore );
         setTiles( 5, 8, TILE_PRESS_B, TILE_PRESS_B_W );
 
         while( joypad() != J_B ) wait_vbl_done;
