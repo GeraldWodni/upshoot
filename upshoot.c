@@ -283,25 +283,25 @@ void shoot() {
         }
     }
 
-    /* sound */
+    /* draw ray & sound */
     if( shootRepeat == RAY_DURATION ) {
         NR14_REG = 0x87; // TL-- -FFF Trigger, Length enable, Frequency MSB
-        //NR44_REG = 0x80; // NR44 FF23 TL-- ---- Trigger, Length enable
-    }
-
-    /* draw enemies */
-    if( shootRepeat > 2 ) {
-        shootRepeat--;
         for( UINT8 x = 0; x < BW; x++ )
             setTile( x, shot, TILE_RAY );
+    }
+
+    if( shootRepeat > 2 ) {
+        shootRepeat--;
         return;
     }
+    /* end ray */
     if( shootRepeat == 2 ) {
         shootRepeat--;
         for( UINT8 x = 0; x < BW; x++ )
             setTile( x, shot, TILE_STARFIELD );
         return;
     }
+    /* wait for button release */
     if( shootRepeat == 1 && joypad() != J_A )
         shootRepeat = 0;
 }
