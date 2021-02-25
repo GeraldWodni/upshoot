@@ -5,7 +5,7 @@ GBDK=../gbdk
 EMULATOR=mgba-qt
 
 CC=$(GBDK)/bin/lcc
-CCFLAGS=-Wa-l -Wl-m -Wl-j
+CCFLAGS=-Wa-l -Wl-m -Wl-j -Wm-yc
 
 all: $(PROJECT).gb
 
@@ -15,6 +15,11 @@ $(PROJECT).gb: $(PROJECT).c media/*.c
 run: $(PROJECT).gb
 	$(EMULATOR) $(PROJECT).gb
 
-.PHONY: tile-designer
+.PHONY: tile-designer, clean
 tile-designer:
 	wine ../gbtd/GBTD.EXE
+
+clean:
+	rm $(PROJECT).gb
+	rm $(PROJECT).map
+	rm $(PROJECT).noi

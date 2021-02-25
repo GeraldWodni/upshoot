@@ -1,6 +1,8 @@
 #include <gb/gb.h>
+#include <gb/cgb.h>
 #include <stdio.h>
 #include <rand.h>
+#include "media/tiles.h"
 #include "media/tiles.c"
 
 #define NUMBER_OF_TILES 34
@@ -28,6 +30,11 @@
 #define SPRITE_ENEMIES 2
 #define SPRITE(I) shadow_OAM[I]
 #define ENEMY_SPRITE(I) SPRITE(SPRITE_ENEMIES+I)
+
+// TileColor: https://stackoverflow.com/a/1489985
+#define PASTER( X, Y ) X ## Y
+#define EVALUATOR( X, Y ) PASTER( X, Y )
+#define TCOL( X ) EVALUATOR( TilesCGB, X )
 
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
@@ -58,7 +65,7 @@ INT8 gameRunning = -1;
 INT8 explosions_time[ENEMIES];
 INT8 player;
 INT8 shot;
-INT8 lifes = 0;
+INT8 lifes;
 UINT8 enemySpeed = ENEMY_MIN_SPEED;
 
 INT16 highscore = 0;
@@ -125,15 +132,23 @@ UINT8 randomEnemyX() {
 void resetEnemy( INT8 enemy ) {
     INT8 r = rand();
     UINT8 tile;
-    if( r > 0x70 )
+    UINT8 prop;
+    if( r > 0x70 ) {
         tile = TILE_LIFE;
-    else if( r > 0x00 )
+        prop = TCOL( TILE_LIFE );
+    }
+    else if( r > 0x00 ) {
         tile = TILE_ASTROID;
-    else
+        prop = TCOL( TILE_ASTROID );
+    }
+    else {
         tile = TILE_ENEMY;
+        prop = TCOL( TILE_ENEMY );
+    }
 
     ENEMY_SPRITE(enemy).tile = tile;
     ENEMY_SPRITE(enemy).x = randomEnemyX();
+    ENEMY_SPRITE(enemy).prop = prop;
 }
 
 void updateExplosions() {
@@ -216,6 +231,7 @@ void killEnemy( INT8 enemy ) {
     NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
 
     ENEMY_SPRITE( enemy ).tile = TILE_EXPLOSION;
+    ENEMY_SPRITE( enemy ).prop = TCOL(TILE_EXPLOSION);
     explosions_time[enemy] = EXPLOSION_FRAMES;
 }
 
@@ -266,10 +282,24 @@ void shoot() {
         shootRepeat = 0;
 }
 
+UINT16 spritePalette[] = {
+    /* 0 3 2 1 */
+    TilesCGBPal0c0, TilesCGBPal0c1, TilesCGBPal0c2, TilesCGBPal0c3,
+    TilesCGBPal1c0, TilesCGBPal1c1, TilesCGBPal1c2, TilesCGBPal1c3,
+    TilesCGBPal2c0, TilesCGBPal2c1, TilesCGBPal2c2, TilesCGBPal2c3,
+    TilesCGBPal3c0, TilesCGBPal3c1, TilesCGBPal3c2, TilesCGBPal3c3,
+    TilesCGBPal4c0, TilesCGBPal4c1, TilesCGBPal4c2, TilesCGBPal4c3,
+    TilesCGBPal5c0, TilesCGBPal5c1, TilesCGBPal5c2, TilesCGBPal5c3,
+    TilesCGBPal6c0, TilesCGBPal6c1, TilesCGBPal6c2, TilesCGBPal6c3,
+    TilesCGBPal7c0, TilesCGBPal7c1, TilesCGBPal7c2, TilesCGBPal7c3
+};
+
 void init() {
     /* background */
+    set_bkg_palette( 0, 8, spritePalette );
     set_bkg_data( 0, NUMBER_OF_TILES, Tiles );
     fill_bkg_rect( 0, 0, BW, BH, TILE_STARFIELD );
+
 
     /* window */
     move_win( 7, PH-8 );
@@ -278,31 +308,42 @@ void init() {
     setTile( LIFE_X-3, LIFE_Y, TILE_LIFE );
     setTile( LIFE_X-2, LIFE_Y, TILE_X );
     setTile( LIFE_X-1, LIFE_Y, TILE_EMPTY );
-    tileTarget = TARGET_BKG;
+
+    /* window-colors */
+    VBK_REG=1;
+    setAllTiles( 6 );
+    VBK_REG=0;
+    tileTarget=TARGET_BKG;
+
 
     /* sprites */
+    set_sprite_palette( 0, 8, spritePalette );
     set_sprite_data( SPRITE_ROCKET, NUMBER_OF_TILES, Tiles );
     set_sprite_tile( SPRITE_ROCKET, TILE_ROCKET );
-    set_sprite_prop( SPRITE_ROCKET, 0x00 );
+    set_sprite_prop( SPRITE_ROCKET, TCOL( TILE_ROCKET ) );
     move_sprite(     SPRITE_ROCKET, 0, 0 );
 
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
-        if( i==TH/2 )
+        if( i==TH/2 ) {
             set_sprite_tile( SPRITE_ENEMIES + i, TILE_LIFE );
-        else
+            set_sprite_prop( SPRITE_ENEMIES + i, TCOL( TILE_LIFE ) );
+        }
+        else {
             set_sprite_tile( SPRITE_ENEMIES + i, TILE_ENEMY );
-        set_sprite_prop( SPRITE_ENEMIES + i, 0x00 );
+            set_sprite_prop( SPRITE_ENEMIES + i, TCOL( TILE_ENEMY ) );
+        }
         move_sprite(     SPRITE_ENEMIES + i, randomEnemyX(), 16 + i*8 );
 
         explosions_time[i] = 0;
     }
 
     set_sprite_tile( SPRITE_PLAYER, TILE_PLAYER );
-    set_sprite_prop( SPRITE_PLAYER, 0x00 );
+    set_sprite_prop( SPRITE_PLAYER, TCOL( TILE_PLAYER ) );
     move_sprite(     SPRITE_PLAYER, 8, 16 );
     player = TH/2;
     movePlayer( 0 );
 
+    lifes = 0;
     gameRunning = -1;
 
     // sound registers: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware
