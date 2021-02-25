@@ -38,6 +38,7 @@
 
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
+#define LIFELOST_FRAMES 21
 
 #define TARGET_BKG 0
 #define TARGET_WIN 1
@@ -89,6 +90,18 @@ void setAllTiles( UINT8 tile ) {
         for( INT8 x = 0; x < TW; x++ )
             setTile( x, y, tile );
 }
+
+UINT16 spritePalette[] = {
+    /* 0 3 2 1 */
+    TilesCGBPal0c0, TilesCGBPal0c1, TilesCGBPal0c2, TilesCGBPal0c3,
+    TilesCGBPal1c0, TilesCGBPal1c1, TilesCGBPal1c2, TilesCGBPal1c3,
+    TilesCGBPal2c0, TilesCGBPal2c1, TilesCGBPal2c2, TilesCGBPal2c3,
+    TilesCGBPal3c0, TilesCGBPal3c1, TilesCGBPal3c2, TilesCGBPal3c3,
+    TilesCGBPal4c0, TilesCGBPal4c1, TilesCGBPal4c2, TilesCGBPal4c3,
+    TilesCGBPal5c0, TilesCGBPal5c1, TilesCGBPal5c2, TilesCGBPal5c3,
+    TilesCGBPal6c0, TilesCGBPal6c1, TilesCGBPal6c2, TilesCGBPal6c3,
+    TilesCGBPal7c0, TilesCGBPal7c1, TilesCGBPal7c2, TilesCGBPal7c3
+};
 
 void movePlayer( INT8 direction ) {
     player += direction;
@@ -173,6 +186,21 @@ void updateBackground() {
     scroll_bkg( 1, 0 );
 }
 
+UINT8 lifeLostReset = 0;
+INT8 lifeLost() {
+    NR24_REG = 0xC1; // NR24 FF19 TL-- -FFF Trigger, Length enable, Frequency MSB
+
+    // change background colors
+    set_bkg_palette( 6, 1, &(spritePalette[7*4]) );
+    lifeLostReset = LIFELOST_FRAMES;
+
+    if( --lifes < 0 ) {
+        gameRunning = 0;
+        return 0;
+    }
+    return -1;
+}
+
 UINT8 frameCounter = 0;
 void updateEnemies() {
     frameCounter++;
@@ -203,9 +231,7 @@ void updateEnemies() {
                 resetEnemy(i);
                 continue;
             }
-            if( --lifes < 0 )
-                gameRunning = 0;
-            else {
+            if( lifeLost() ) {
                 resetEnemy(i);
                 continue;
             }
@@ -214,9 +240,7 @@ void updateEnemies() {
         /* object past player */
         if( x < 7 ) {
             if( tile != TILE_ASTROID && tile != TILE_LIFE ) {
-                if( --lifes < 0 )
-                    gameRunning = 0;
-                else {
+                if( lifeLost() ) {
                     resetEnemy(i);
                     continue;
                 }
@@ -281,18 +305,6 @@ void shoot() {
     if( shootRepeat == 1 && joypad() != J_A )
         shootRepeat = 0;
 }
-
-UINT16 spritePalette[] = {
-    /* 0 3 2 1 */
-    TilesCGBPal0c0, TilesCGBPal0c1, TilesCGBPal0c2, TilesCGBPal0c3,
-    TilesCGBPal1c0, TilesCGBPal1c1, TilesCGBPal1c2, TilesCGBPal1c3,
-    TilesCGBPal2c0, TilesCGBPal2c1, TilesCGBPal2c2, TilesCGBPal2c3,
-    TilesCGBPal3c0, TilesCGBPal3c1, TilesCGBPal3c2, TilesCGBPal3c3,
-    TilesCGBPal4c0, TilesCGBPal4c1, TilesCGBPal4c2, TilesCGBPal4c3,
-    TilesCGBPal5c0, TilesCGBPal5c1, TilesCGBPal5c2, TilesCGBPal5c3,
-    TilesCGBPal6c0, TilesCGBPal6c1, TilesCGBPal6c2, TilesCGBPal6c3,
-    TilesCGBPal7c0, TilesCGBPal7c1, TilesCGBPal7c2, TilesCGBPal7c3
-};
 
 void init() {
     /* background */
@@ -390,6 +402,10 @@ void init() {
 void updateWindow() {
     drawNumber( HIGHSCORE_X, HIGHSCORE_Y, highscore );
     drawNumber( LIFE_X, LIFE_Y, lifes );
+
+    // change background colors
+    if( lifeLostReset > 0 && --lifeLostReset == 0 )
+            set_bkg_palette( 6, 1, &(spritePalette[6*4]) );
 }
 
 void main() {

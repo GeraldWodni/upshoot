@@ -89,14 +89,14 @@
 /* Gameboy Color palette 6 */
 #define TilesCGBPal6c0 31943
 #define TilesCGBPal6c1 8935
-#define TilesCGBPal6c2 6596
+#define TilesCGBPal6c2 31870
 #define TilesCGBPal6c3 32767
 
 /* Gameboy Color palette 7 */
-#define TilesCGBPal7c0 6076
+#define TilesCGBPal7c0 3263
 #define TilesCGBPal7c1 8935
-#define TilesCGBPal7c2 6596
-#define TilesCGBPal7c3 5344
+#define TilesCGBPal7c2 31741
+#define TilesCGBPal7c3 10570
 
 /* CGB palette entries. */
 #define TilesCGB0 0
