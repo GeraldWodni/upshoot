@@ -17,6 +17,7 @@
 #define TILE_ASTROID 8
 #define TILE_LIFE 9
 #define TILE_ZERO 10
+#define TILE_A 20
 #define TILE_SCORE 20
 #define TILE_SCORE_W 3
 #define TILE_GAME_OVER 23
@@ -39,6 +40,10 @@
 #define REPEAT_FRAMES 4
 #define EXPLOSION_FRAMES 42
 #define LIFELOST_FRAMES 21
+#define RAY_TEMP_PER_SHOT 5
+#define RAY_TEMP_FAIL 51
+#define RAY_TEMP_WARN 40
+#define RAY_TEMP_COOL_FRAMES 10
 
 #define TARGET_BKG 0
 #define TARGET_WIN 1
@@ -62,11 +67,16 @@
 #define LIFE_X 3
 #define LIFE_Y HIGHSCORE_Y
 
+#define RAY_TEMP_X 12
+#define RAY_TEMP_Y HIGHSCORE_Y
+
 INT8 gameRunning = -1;
 INT8 explosions_time[ENEMIES];
 INT8 player;
 INT8 shot;
 INT8 lifes;
+INT8 rayTemperature;
+INT8 rayLocked;
 UINT8 enemySpeed = ENEMY_MIN_SPEED;
 
 INT16 highscore = 0;
@@ -87,7 +97,7 @@ void setTiles( INT8 x, INT8 y, INT8 startTile, INT8 w ) {
 
 void setAllTiles( UINT8 tile ) {
     for( INT8 y = 0; y < TH; y++ )
-        for( INT8 x = 0; x < TW; x++ )
+        for( INT8 x = 0; x < BW; x++ )
             setTile( x, y, tile );
 }
 
@@ -113,9 +123,25 @@ void movePlayer( INT8 direction ) {
     SPRITE(SPRITE_PLAYER).y = player*8 + 16;
 }
 
-void drawNumber( INT8 x, INT8 y, INT16 value ) {
+void drawText( INT8 x, INT8 y, char *text ) {
+    for (; *text != '\0'; text++){
+        char c = *text;
+        UINT8 tile = TILE_X;
+        if( c == ' ' )
+            tile = TILE_EMPTY;
+        else if( '0' <= c && c <= '9' )
+            tile = TILE_ZERO + (c-'0');
+        else if( 'A' <= c && c <= 'L')
+            tile = TILE_A + (c-'A');
+
+        setTile( x++, y, tile );
+    }
+}
+
+void drawNumber( INT8 x, INT8 y, INT16 value, INT8 minWidth ) {
     if( value == 0 ) {
-        setTile( x, y, TILE_ZERO );
+        while( minWidth-- > 0 )
+            setTile( x--, y, TILE_ZERO );
         return;
     }
 
@@ -124,7 +150,10 @@ void drawNumber( INT8 x, INT8 y, INT16 value ) {
         value-=remainder;
         value/=10;
         setTile( x--, y, TILE_ZERO+remainder );
+        minWidth--;
     }
+    while( minWidth-- > 0 )
+        setTile( x--, y, TILE_ZERO );
 }
 
 INT8 numberWidth( INT16 number ) {
@@ -228,6 +257,8 @@ void updateEnemies() {
         if( x < 15 && player == i ) {
             if( tile == TILE_LIFE ) {
                 lifes++;
+                if( lifes >= 100 )
+                    lifes = 99;
                 resetEnemy(i);
                 continue;
             }
@@ -261,7 +292,19 @@ void killEnemy( INT8 enemy ) {
 
 INT8 shootRepeat = 0;
 INT8 rocketY = -1;
-void shoot() {
+INT8 rayTempRepeat = 0;
+void updateShot() {
+    /* cool down ray */
+    if( rayTempRepeat > 0 )
+        rayTempRepeat--;
+    else if( rayTemperature > 0 ) {
+        rayTemperature--;
+        rayTempRepeat = RAY_TEMP_COOL_FRAMES;
+        if( rayLocked && rayTemperature == 0 ) {
+            rayLocked = 0;
+        }
+    }
+
     /* check for rocket collisions */
     if( rocketY >= 0 ) {
         UINT8 tile = ENEMY_SPRITE(shot).tile;
@@ -319,14 +362,15 @@ void init() {
     tileTarget = TARGET_WIN;
     setTile( LIFE_X-3, LIFE_Y, TILE_LIFE );
     setTile( LIFE_X-2, LIFE_Y, TILE_X );
-    setTile( LIFE_X-1, LIFE_Y, TILE_EMPTY );
+
+    setTile( RAY_TEMP_X-3, RAY_TEMP_Y, TILE_RAY );
+    setTile( RAY_TEMP_X-2, RAY_TEMP_Y, TILE_X );
 
     /* window-colors */
     VBK_REG=1;
     setAllTiles( 6 );
     VBK_REG=0;
     tileTarget=TARGET_BKG;
-
 
     /* sprites */
     set_sprite_palette( 0, 8, spritePalette );
@@ -356,6 +400,8 @@ void init() {
     movePlayer( 0 );
 
     lifes = 0;
+    rayTemperature = 0;
+    rayLocked = 0;
     gameRunning = -1;
 
     // sound registers: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware
@@ -400,8 +446,22 @@ void init() {
 }
 
 void updateWindow() {
-    drawNumber( HIGHSCORE_X, HIGHSCORE_Y, highscore );
-    drawNumber( LIFE_X, LIFE_Y, lifes );
+    drawNumber( HIGHSCORE_X, HIGHSCORE_Y, highscore, 1 );
+    drawNumber( LIFE_X, LIFE_Y, lifes, 2 );
+    drawNumber( RAY_TEMP_X, RAY_TEMP_Y, rayTemperature, 2 );
+
+    // change background of ray temperature
+    VBK_REG=1;
+    tileTarget = TARGET_WIN;
+    INT8 palette = 6;
+    if( rayLocked )
+        palette = 3;
+    else if( rayTemperature >= RAY_TEMP_WARN )
+        palette = 1;
+    for( INT8 i = 0; i < 4; i++ )
+        setTile( RAY_TEMP_X-i, RAY_TEMP_Y, palette );
+    tileTarget = TARGET_BKG;
+    VBK_REG=0;
 
     // change background colors
     if( lifeLostReset > 0 && --lifeLostReset == 0 )
@@ -424,7 +484,7 @@ void main() {
         while(gameRunning) {
             updateEnemies();
             updateExplosions();
-            shoot();
+            updateShot();
             updateRocket();
             updateBackground();
             tileTarget = TARGET_WIN;
@@ -449,6 +509,14 @@ void main() {
                     break;
                 case J_A:
                     if( shootRepeat == 0 ) {
+                        if( rayLocked )
+                            break;
+                        rayTemperature += RAY_TEMP_PER_SHOT;
+                        if( rayTemperature >= RAY_TEMP_FAIL ) {
+                            rayLocked = -1;
+                            break;
+                        }
+
                         shot = player;
                         shootRepeat = RAY_DURATION;
                     }
@@ -456,6 +524,18 @@ void main() {
                 case J_B:
                     move_sprite( SPRITE_ROCKET, 13, (player+2)*8+1 );
                     rocketY = player;
+                    break;
+                case J_START:
+                    set_bkg_palette_entry( TCOL(TILE_STARFIELD), 0, RGB_PURPLE );
+
+                    move_bkg( 0, 0 );
+                    drawText( 0, 0, "HI1337 ABCDE" );
+
+                    while( joypad() == J_START ) wait_vbl_done();
+                    while( joypad() != J_START ) wait_vbl_done();
+
+                    while( joypad() == J_START ) wait_vbl_done();
+                    set_bkg_palette_entry( TCOL(TILE_STARFIELD), 0, RGB_BLACK );
                     break;
                 default:
                     repeat = 0;
@@ -472,10 +552,10 @@ void main() {
         setTiles( 5, 5, TILE_GAME_OVER, TILE_GAME_OVER_W );
         setTiles( 5, 6, TILE_SCORE, TILE_SCORE_W );
         setTile( 5 + TILE_SCORE_W, 6, TILE_EMPTY );
-        drawNumber( 5 + TILE_SCORE_W + numberWidth( highscore ), 6, highscore );
+        drawNumber( 5 + TILE_SCORE_W + numberWidth( highscore ), 6, highscore, 1 );
         setTiles( 5, 8, TILE_PRESS_B, TILE_PRESS_B_W );
 
-        while( joypad() != J_B ) wait_vbl_done;
-        while( joypad() != 0   ) wait_vbl_done; // do not shoot rocket
+        while( joypad() != J_START ) wait_vbl_done(); // wait for start
+        while( joypad() == J_START ) wait_vbl_done(); // wait for release
     }
 }
