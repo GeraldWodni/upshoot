@@ -26,11 +26,7 @@
 #define TILE_PRESS_B_W 4
 #define TILE_X 33
 
-#define SPRITE_ROCKET 0
-#define SPRITE_PLAYER 1
-#define SPRITE_ENEMIES 2
-#define SPRITE(I) shadow_OAM[I]
-#define ENEMY_SPRITE(I) SPRITE(SPRITE_ENEMIES+I)
+#define SPRITE(I) (shadow_OAM[I])
 
 // TileColor: https://stackoverflow.com/a/1489985
 #define PASTER( X, Y ) X ## Y
@@ -58,14 +54,24 @@
 #define ENEMIES TH-1
 #define ENEMY_MIN_SPEED 8
 #define ENEMY_MAX_SPEED 1
+#define ROCKETS_MAX 3
 #define ASTROID_SPEED 2
 #define RAY_DURATION 8
+
+#define SPRITE_PLAYER 0
+#define SPRITE_ROCKET 1
+#define SPRITE_ENEMIES SPRITE_ROCKET+ROCKETS_MAX
+#define ENEMY_SPRITE(I) SPRITE(SPRITE_ENEMIES+I)
+#define ROCKET_SPRITE(I) SPRITE(SPRITE_ROCKET+I)
 
 #define HIGHSCORE_X TW-1
 #define HIGHSCORE_Y 0
 
 #define LIFE_X 3
 #define LIFE_Y HIGHSCORE_Y
+
+#define ROCKETS_X 7
+#define ROCKETS_Y HIGHSCORE_Y
 
 #define RAY_TEMP_X 12
 #define RAY_TEMP_Y HIGHSCORE_Y
@@ -77,6 +83,9 @@ INT8 shot;
 INT8 lifes;
 INT8 rayTemperature;
 INT8 rayLocked;
+INT8 rockets;
+INT8 buttonLockB;
+INT8 rocketsY[ROCKETS_MAX];
 UINT8 enemySpeed = ENEMY_MIN_SPEED;
 
 INT16 highscore = 0;
@@ -171,6 +180,12 @@ UINT8 randomEnemyX() {
     return 255 - (rand() & 0x3F);
 }
 
+void resetRocket( INT8 rocket ) {
+    rockets--;
+    move_sprite( SPRITE_ROCKET+rocket, 0, 0 );
+    rocketsY[rocket] = -1;
+}
+
 void resetEnemy( INT8 enemy ) {
     INT8 r = rand();
     UINT8 tile;
@@ -203,12 +218,13 @@ void updateExplosions() {
         }
 }
 
-void updateRocket() {
-     if( shadow_OAM[SPRITE_ROCKET].x > 0 ) {
-        scroll_sprite( SPRITE_ROCKET, 1, 0 );
-        if( shadow_OAM[SPRITE_ROCKET].x > PW+8 )
-            move_sprite( SPRITE_ROCKET, 0, 0 );
-     }
+void updateRockets() {
+    for( INT8 i = 0; i < ROCKETS_MAX; i++ )
+        if( ROCKET_SPRITE(i).x > 0 ) {
+            scroll_sprite( SPRITE_ROCKET+i, 1, 0 );
+            if( ROCKET_SPRITE(i).x > PW+8 )
+                resetRocket(i);
+        }
 }
 
 void updateBackground() {
@@ -239,7 +255,7 @@ void updateEnemies() {
             continue;
 
         UINT8 x = ENEMY_SPRITE(i).x;
-        switch( ENEMY_SPRITE(i).tile ) {
+        switch( tile ) {
             case TILE_LIFE:
             case TILE_ASTROID:
                 x+= -ASTROID_SPEED;
@@ -291,7 +307,6 @@ void killEnemy( INT8 enemy ) {
 }
 
 INT8 shootRepeat = 0;
-INT8 rocketY = -1;
 INT8 rayTempRepeat = 0;
 void updateShot() {
     /* cool down ray */
@@ -306,16 +321,17 @@ void updateShot() {
     }
 
     /* check for rocket collisions */
-    if( rocketY >= 0 ) {
-        UINT8 tile = ENEMY_SPRITE(shot).tile;
-        if( ( tile == TILE_ENEMY || tile == TILE_LIFE ) && ENEMY_SPRITE( rocketY ).x <= shadow_OAM[SPRITE_ROCKET].x ) {
-            highscore += 10;
-            killEnemy( rocketY );
+    for( INT8 i = 0; i < ROCKETS_MAX; i++ )
+        if( rocketsY[i] >= 0 ) {
+            UINT8 tile = ENEMY_SPRITE(shot).tile;
+            if( ( tile == TILE_ENEMY || tile == TILE_LIFE )
+                && ENEMY_SPRITE( rocketsY[i] ).x <= ROCKET_SPRITE(i).x ) {
+                highscore += 10;
+                killEnemy( rocketsY[i] );
 
-            rocketY = -1;
-            move_sprite( SPRITE_ROCKET, 0, 0 );
+                resetRocket(i);
+            }
         }
-    }
 
     /* check for enemy collisions */
     if( shootRepeat >= 2 ) {
@@ -358,10 +374,13 @@ void init() {
 
     /* window */
     move_win( 7, PH-8 );
-    fill_win_rect( 0, 0, TW, TH, TILE_GRADIENT );
+    fill_win_rect( 0, 0, TW, TH, TILE_EMPTY );
     tileTarget = TARGET_WIN;
     setTile( LIFE_X-3, LIFE_Y, TILE_LIFE );
     setTile( LIFE_X-2, LIFE_Y, TILE_X );
+
+    setTile( ROCKETS_X-2, ROCKETS_Y, TILE_ROCKET );
+    setTile( ROCKETS_X-1, ROCKETS_Y, TILE_X );
 
     setTile( RAY_TEMP_X-3, RAY_TEMP_Y, TILE_RAY );
     setTile( RAY_TEMP_X-2, RAY_TEMP_Y, TILE_X );
@@ -374,11 +393,13 @@ void init() {
 
     /* sprites */
     set_sprite_palette( 0, 8, spritePalette );
-    set_sprite_data( SPRITE_ROCKET, NUMBER_OF_TILES, Tiles );
-    set_sprite_tile( SPRITE_ROCKET, TILE_ROCKET );
-    set_sprite_prop( SPRITE_ROCKET, TCOL( TILE_ROCKET ) );
-    move_sprite(     SPRITE_ROCKET, 0, 0 );
-
+    set_sprite_data( 0, NUMBER_OF_TILES, Tiles );
+    for( INT8 i = 0; i < ROCKETS_MAX; i++ ) {
+        set_sprite_tile( SPRITE_ROCKET+i, TILE_ROCKET );
+        set_sprite_prop( SPRITE_ROCKET+i, TCOL( TILE_ROCKET ) );
+        move_sprite(     SPRITE_ROCKET+i, 0, 0 );
+        resetRocket(i);
+    }
     for( UINT8 i = 0; i < ENEMIES; i++ ) {
         if( i==TH/2 ) {
             set_sprite_tile( SPRITE_ENEMIES + i, TILE_LIFE );
@@ -400,6 +421,7 @@ void init() {
     movePlayer( 0 );
 
     lifes = 0;
+    rockets = 0;
     rayTemperature = 0;
     rayLocked = 0;
     gameRunning = -1;
@@ -449,6 +471,7 @@ void updateWindow() {
     drawNumber( HIGHSCORE_X, HIGHSCORE_Y, highscore, 1 );
     drawNumber( LIFE_X, LIFE_Y, lifes, 2 );
     drawNumber( RAY_TEMP_X, RAY_TEMP_Y, rayTemperature, 2 );
+    drawNumber( ROCKETS_X, ROCKETS_Y, ROCKETS_MAX-rockets, 1 );
 
     // change background of ray temperature
     VBK_REG=1;
@@ -485,13 +508,16 @@ void main() {
             updateEnemies();
             updateExplosions();
             updateShot();
-            updateRocket();
+            updateRockets();
             updateBackground();
             tileTarget = TARGET_WIN;
             updateWindow();
             tileTarget = TARGET_BKG;
 
-            switch( joypad() ) {
+            UINT8 buttons = joypad();
+            if( (buttons & J_B) == 0 )
+                buttonLockB = 0;
+            switch( buttons ) {
                 case J_UP:
                     if( repeat-- == 0 ) {
                         movePlayer(-1);
@@ -522,8 +548,16 @@ void main() {
                     }
                     break;
                 case J_B:
-                    move_sprite( SPRITE_ROCKET, 13, (player+2)*8+1 );
-                    rocketY = player;
+                    if( buttonLockB || rockets >= ROCKETS_MAX )
+                        break;
+                    buttonLockB = -1;
+                    rockets++;
+                    for( INT8 i = 0; i < ROCKETS_MAX; i++ )
+                        if( rocketsY[i] < 0 ) {
+                            move_sprite( SPRITE_ROCKET+i, 13, (player+2)*8+1 );
+                            rocketsY[i] = player;
+                            break;
+                        }
                     break;
                 case J_START:
                     set_bkg_palette_entry( TCOL(TILE_STARFIELD), 0, RGB_PURPLE );
