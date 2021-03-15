@@ -365,6 +365,59 @@ void updateShot() {
         shootRepeat = 0;
 }
 
+unsigned int timer_counter;
+UINT8 beats[] = {
+  //   1     2     3     4     5     6     7     8
+    0xA3, 0xA3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // beat 0
+    0xA3, 0xA3, 0x00, 0xA3, 0x00, 0x00, 0x00, 0x00, // beat 1
+    0x93, 0x93, 0x00, 0x93, 0x00, 0x00, 0x00, 0x00, // beat 2
+    0x93, 0x93, 0x00, 0x00, 0xC2, 0xC2, 0xC2, 0xC2, // beat 3
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // beat 4
+    0xA3, 0xA3, 0xA3, 0xA3, 0xA3, 0xA3, 0xA3, 0xA3, // beat 5
+    0x93, 0x93, 0x93, 0x93, 0x93, 0x93, 0x93, 0x93  // beat 6
+};
+
+UINT8 sequences[] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 2, 3,
+    1, 1, 1, 1, 1, 1, 4, 4,
+    2, 2, 2, 2, 2, 2, 4, 4,
+    1, 1, 1, 1, 1, 1, 5, 5,
+    2, 2, 2, 2, 2, 2, 6, 6,
+    1, 1, 1, 1, 1, 1, 5, 5,
+    2, 2, 2, 2, 2, 2, 6, 6,
+};
+
+UINT8 beat = 0;
+UINT8 sequence = 0;
+void tim() {
+    UINT8 index = (sequences[sequence] * 8) + beat;
+    UINT8 note = beats[index];
+
+    switch( note ) {
+        case 0xA3:
+            NR23_REG = 110; // A3
+            NR24_REG = 0x80;
+            break;
+        case 0x93:
+            NR23_REG = 196; // G3
+            NR24_REG = 0x80;
+            break;
+        case 0xC4:
+            NR23_REG = 6; // G3
+            NR24_REG = 0x81;
+            break;
+    }
+
+    beat++;
+    if( beat == 8 ) {
+        beat = 0;
+        sequence++;
+    }
+    if( sequence == 64 )
+        sequence = 0;
+}
+
 void init() {
     /* background */
     set_bkg_palette( 0, 8, spritePalette );
@@ -448,23 +501,43 @@ void init() {
     NR43_REG = 0x3F; // SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
     //NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
 
-    //INT8 wait = -1;
-    //while(wait) {
-    //    switch( joypad() ) {
-    //        case J_UP:
-    //            NR14_REG = 0x87;
-    //            break;
-    //        case J_DOWN:
-    //            NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
-    //            break;
-    //        case J_RIGHT:
-    //            NR24_REG = 0xC1; // NR24 FF19 TL-- -FFF Trigger, Length enable, Frequency MSB
-    //            break;
-    //        case J_A:
-    //            wait = 0;
-    //            break;
-    //    }
-    //}
+    INT8 wait = -1;
+    // single note on square 2
+    NR21_REG = 0x41; // DDLL LLLL Duty, Length load (64-L)
+    NR22_REG = 0x81; // VVVV APPP Starting volume, Envelope add mode, period
+    NR23_REG = 0x28; // FFFF FFFF Frequency LSB
+
+    // Setup timer interrupts
+    CRITICAL {
+        add_TIM(tim);
+    }
+    TMA_REG=0xFF-102+1;
+    TAC_REG=0x04U;
+    //set_interrupts(TIM_IFLAG);
+
+    while(wait) {
+        switch( joypad() ) {
+            case J_UP:
+                //NR23_REG = 28;
+                NR23_REG = 110; // A3
+                //NR24_REG = 0x80;
+                set_interrupts(TIM_IFLAG);
+                break;
+            case J_DOWN:
+                //NR23_REG = 49;
+                //NR23_REG = 196; // G3
+                //NR24_REG = 0x80;
+                set_interrupts(0);
+                break;
+            case J_RIGHT:
+                NR23_REG = 62; // C4
+                NR24_REG = 0x81;
+                break;
+            case J_A:
+                wait = 0;
+                break;
+        }
+    }
 }
 
 void updateWindow() {
