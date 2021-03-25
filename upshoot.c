@@ -18,12 +18,6 @@
 #define TILE_LIFE 9
 #define TILE_ZERO 10
 #define TILE_A 20
-#define TILE_SCORE 20
-#define TILE_SCORE_W 3
-#define TILE_GAME_OVER 23
-#define TILE_GAME_OVER_W 6
-#define TILE_PRESS_B 29
-#define TILE_PRESS_B_W 4
 #define TILE_X 46
 
 #define SPRITE(I) (shadow_OAM[I])
@@ -145,8 +139,10 @@ void drawText( INT8 x, INT8 y, char *text ) {
             tile = TILE_EMPTY;
         else if( '0' <= c && c <= '9' )
             tile = TILE_ZERO + (c-'0');
-        else if( 'A' <= c && c <= 'L')
+        else if( 'A' <= c && c <= 'Z')
             tile = TILE_A + (c-'A');
+        else if( c == 'a' )
+            tile = TILE_ASTROID;
 
         setTile( x++, y, tile );
     }
@@ -450,6 +446,39 @@ void tim() {
         sequence = 0;
 }
 
+void init();
+
+UINT8 introShown;
+void intro() {
+    if( introShown )
+        return;
+
+    move_bkg( 0, 0 );
+    drawText( 7, 5, "UPSHaaT" );
+    drawText( 5, 7, "PRESS START" );
+
+    // wait for button press
+    INT8 wait = -1;
+    while(wait) {
+        switch( joypad() ) {
+            case J_A:
+                set_interrupts(TIM_IFLAG);
+                break;
+            case J_B:
+                set_interrupts(0);
+                break;
+            case J_START:
+                wait = 0;
+                break;
+        }
+    }
+    // wait for start to be released
+    while( joypad() & J_START );
+
+    introShown = 1;
+    init();
+}
+
 void init() {
     /* background */
     set_bkg_palette( 0, 8, spritePalette );
@@ -533,7 +562,6 @@ void init() {
     NR43_REG = 0x3F; // SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
     //NR44_REG = 0xC0; // TL-- ---- Trigger, Length enable
 
-    INT8 wait = -1;
     // single note on square 2
     NR21_REG = 0x41; // DDLL LLLL Duty, Length load (64-L)
     NR22_REG = 0x81; // VVVV APPP Starting volume, Envelope add mode, period
@@ -548,29 +576,7 @@ void init() {
     TAC_REG=0x04U;
     //set_interrupts(TIM_IFLAG);
 
-    while(wait) {
-        switch( joypad() ) {
-            case J_UP:
-                //NR23_REG = 28;
-                NR23_REG = 110; // A3
-                //NR24_REG = 0x80;
-                set_interrupts(TIM_IFLAG);
-                break;
-            case J_DOWN:
-                //NR23_REG = 49;
-                //NR23_REG = 196; // G3
-                //NR24_REG = 0x80;
-                set_interrupts(0);
-                break;
-            case J_RIGHT:
-                NR23_REG = 62; // C4
-                NR24_REG = 0x81;
-                break;
-            case J_A:
-                wait = 0;
-                break;
-        }
-    }
+    intro();
 }
 
 void updateWindow() {
@@ -599,6 +605,7 @@ void updateWindow() {
 
 void main() {
     UINT8 repeat = 0;
+    introShown = 0;
 
     SHOW_BKG;
     SHOW_WIN;
@@ -668,9 +675,6 @@ void main() {
                 case J_START:
                     set_bkg_palette_entry( TCOL(TILE_STARFIELD), 0, RGB_PURPLE );
 
-                    move_bkg( 0, 0 );
-                    drawText( 0, 0, "HI1337 ABCDE" );
-
                     while( joypad() == J_START ) wait_vbl_done();
                     while( joypad() != J_START ) wait_vbl_done();
 
@@ -689,11 +693,10 @@ void main() {
             ENEMY_SPRITE(i).x = 0;
 
         move_bkg( 0, 0 );
-        setTiles( 5, 5, TILE_GAME_OVER, TILE_GAME_OVER_W );
-        setTiles( 5, 6, TILE_SCORE, TILE_SCORE_W );
-        setTile( 5 + TILE_SCORE_W, 6, TILE_EMPTY );
-        drawNumber( 5 + TILE_SCORE_W + numberWidth( highscore ), 6, highscore, 1 );
-        setTiles( 5, 8, TILE_PRESS_B, TILE_PRESS_B_W );
+        drawText( 5, 5, "GAME OVER" );
+        drawText( 5, 6, "SCORE:" );
+        drawNumber( 5 + 5 + numberWidth( highscore ), 6, highscore, 1 );
+        drawText( 5, 8, "PRESS START" );
 
         while( joypad() != J_START ) wait_vbl_done(); // wait for start
         while( joypad() == J_START ) wait_vbl_done(); // wait for release
