@@ -5,7 +5,7 @@
 #include "media/tiles.h"
 #include "media/tiles.c"
 
-#define NUMBER_OF_TILES 34
+#define NUMBER_OF_TILES 47
 #define TILE_EMPTY 0
 #define TILE_PLAYER 1
 #define TILE_ROCKET 2
@@ -24,7 +24,7 @@
 #define TILE_GAME_OVER_W 6
 #define TILE_PRESS_B 29
 #define TILE_PRESS_B_W 4
-#define TILE_X 33
+#define TILE_X 46
 
 #define SPRITE(I) (shadow_OAM[I])
 
@@ -75,6 +75,11 @@
 
 #define RAY_TEMP_X 12
 #define RAY_TEMP_Y HIGHSCORE_Y
+
+// sound
+#define STEPS_PER_BEAT 8
+#define BEATS_PER_SEQUENCE 8
+#define NUMBER_OF_SEQUENCES 8
 
 INT8 gameRunning = -1;
 INT8 explosions_time[ENEMIES];
@@ -145,6 +150,18 @@ void drawText( INT8 x, INT8 y, char *text ) {
 
         setTile( x++, y, tile );
     }
+}
+
+void drawHexNibble( INT8 x, INT8 y, INT8 value ) {
+    if( value < 0xA )
+        setTile( x, y, value + TILE_ZERO );
+    else
+        setTile( x, y, value - 0xA + TILE_A );
+}
+
+void drawHexByte( INT8 x, INT8 y, INT8 value ) {
+    drawHexNibble( x    , y, value >> 4  );
+    drawHexNibble( x + 1, y, value & 0xF );
 }
 
 void drawNumber( INT8 x, INT8 y, INT16 value, INT8 minWidth ) {
@@ -377,44 +394,59 @@ UINT8 beats[] = {
     0x93, 0x93, 0x93, 0x93, 0x93, 0x93, 0x93, 0x93  // beat 6
 };
 
-UINT8 sequences[] = {
-    0, 0, 0, 0, 0, 0, 0, 0,
-    1, 1, 1, 1, 1, 1, 2, 3,
-    1, 1, 1, 1, 1, 1, 4, 4,
-    2, 2, 2, 2, 2, 2, 4, 4,
-    1, 1, 1, 1, 1, 1, 5, 5,
-    2, 2, 2, 2, 2, 2, 6, 6,
-    1, 1, 1, 1, 1, 1, 5, 5,
-    2, 2, 2, 2, 2, 2, 6, 6,
+typedef struct beatSequences {
+    UINT8 beats[STEPS_PER_BEAT];
+    UINT8 repetitions;
+} beatSequences_t;
+
+// beats [0..7], number of runs (do not use 0)
+beatSequences_t sequences[] = {
+    { { 0, 0, 0, 0, 0, 0, 0, 0 }, 8 },
+    { { 1, 1, 1, 1, 1, 1, 2, 3 }, 4 },
+    { { 1, 1, 1, 1, 1, 1, 4, 4 }, 4 },
+    { { 2, 2, 2, 2, 2, 2, 4, 4 }, 4 },
+    { { 1, 1, 1, 1, 1, 1, 5, 5 }, 4 },
+    { { 2, 2, 2, 2, 2, 2, 6, 6 }, 4 },
+    { { 1, 1, 1, 1, 1, 1, 5, 5 }, 4 },
+    { { 2, 2, 2, 2, 2, 2, 6, 6 }, 4 },
 };
 
+UINT8 beatStep = 0;
 UINT8 beat = 0;
 UINT8 sequence = 0;
+UINT8 repetitions = 0;
 void tim() {
-    UINT8 index = (sequences[sequence] * 8) + beat;
+    UINT8 index = sequences[sequence].beats[beat] * STEPS_PER_BEAT + beatStep;
     UINT8 note = beats[index];
 
     switch( note ) {
         case 0xA3:
-            NR23_REG = 110; // A3
+            NR23_REG = 233; // A#3
             NR24_REG = 0x80;
             break;
         case 0x93:
-            NR23_REG = 196; // G3
+            NR23_REG = 208; // G#3
             NR24_REG = 0x80;
             break;
         case 0xC4:
-            NR23_REG = 6; // G3
+            NR23_REG = 15; // C#4
             NR24_REG = 0x81;
             break;
     }
 
-    beat++;
-    if( beat == 8 ) {
-        beat = 0;
-        sequence++;
+    beatStep++;
+    if( beatStep == STEPS_PER_BEAT ) {
+        beat++;
+        beatStep = 0;
     }
-    if( sequence == 64 )
+    if( beat == BEATS_PER_SEQUENCE ) {
+        beat = 0;
+        if( --repetitions == 0 ) {
+            sequence++;
+            repetitions = sequences[sequence].repetitions;
+        }
+    }
+    if( sequence == NUMBER_OF_SEQUENCES )
         sequence = 0;
 }
 
@@ -508,6 +540,7 @@ void init() {
     NR23_REG = 0x28; // FFFF FFFF Frequency LSB
 
     // Setup timer interrupts
+    repetitions = sequences[0].repetitions;
     CRITICAL {
         add_TIM(tim);
     }
